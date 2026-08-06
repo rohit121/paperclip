@@ -39,6 +39,19 @@ import {
 import { DEFAULT_CURSOR_LOCAL_MODEL } from "@paperclipai/adapter-cursor-local";
 import { ensureOpenCodeModelConfiguredAndAvailable } from "@paperclipai/adapter-opencode-local/server";
 
+export function assertAdapterConfigurationUpdateAuthorized(
+  req: Request,
+  patch: Record<string, unknown>,
+) {
+  const touchesAdapterConfiguration =
+    Object.prototype.hasOwnProperty.call(patch, "adapterType") ||
+    Object.prototype.hasOwnProperty.call(patch, "adapterConfig");
+  if (req.actor.type === "agent" && touchesAdapterConfiguration) {
+    throw forbidden("Only board users can update agent adapter configuration");
+  }
+  return touchesAdapterConfiguration;
+}
+
 export function agentRoutes(db: Db) {
   const DEFAULT_INSTRUCTIONS_PATH_KEYS: Record<string, string> = {
     claude_local: "instructionsFilePath",
@@ -946,6 +959,8 @@ export function agentRoutes(db: Db) {
     }
     await assertCanUpdateAgent(req, existing);
 
+    const touchesAdapterConfiguration = assertAdapterConfigurationUpdateAuthorized(req, req.body);
+
     if (Object.prototype.hasOwnProperty.call(req.body, "permissions")) {
       res.status(422).json({ error: "Use /api/agents/:id/permissions for permission changes" });
       return;
@@ -969,9 +984,6 @@ export function agentRoutes(db: Db) {
 
     const requestedAdapterType =
       typeof patchData.adapterType === "string" ? patchData.adapterType : existing.adapterType;
-    const touchesAdapterConfiguration =
-      Object.prototype.hasOwnProperty.call(patchData, "adapterType") ||
-      Object.prototype.hasOwnProperty.call(patchData, "adapterConfig");
     if (touchesAdapterConfiguration) {
       const rawEffectiveAdapterConfig = Object.prototype.hasOwnProperty.call(patchData, "adapterConfig")
         ? (asRecord(patchData.adapterConfig) ?? {})
