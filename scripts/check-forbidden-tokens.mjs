@@ -11,7 +11,7 @@
  * on the project won't have this list, and that's fine.
  */
 
-import { execSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -39,8 +39,21 @@ let found = false;
 
 for (const token of tokens) {
   try {
-    const result = execSync(
-      `git grep -in --no-color -- ${JSON.stringify(token)} -- ':!pnpm-lock.yaml' ':!.git'`,
+    // No shell: the token is a literal argv entry. `JSON.stringify` escapes for
+    // JSON, not for sh, so a token containing a backtick, `$(...)` or a quote
+    // used to break out of the command and run as part of it.
+    const result = execFileSync(
+      "git",
+      [
+        "grep",
+        "-in",
+        "--no-color",
+        "--",
+        token,
+        "--",
+        ":!pnpm-lock.yaml",
+        ":!.git",
+      ],
       { encoding: "utf8", cwd: repoRoot, stdio: ["pipe", "pipe", "pipe"] },
     );
     if (result.trim()) {
